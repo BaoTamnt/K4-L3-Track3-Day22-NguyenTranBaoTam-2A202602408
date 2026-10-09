@@ -1,0 +1,23 @@
+{
+  "source_notebook": "kaggle/evidence/notebooke3ecbcfb2f-completed-original.ipynb",
+  "source_sha256": "1d2b28b74a322696047a33d4738d580df49b7e32d432770d444cbf34a8305290",
+  "recovered_files": [
+    "adapters/dpo/dpo_metrics.json",
+    "data/eval/judge_summary.json",
+    "submission/screenshots/02-sft-loss.png",
+    "submission/screenshots/02b-pref-length.png",
+    "submission/screenshots/03-dpo-reward-curves.png",
+    "submission/screenshots/04-side-by-side-table.png"
+  ],
+  "verification_source_cell": 108,
+  "missing_from_notebook_outputs": [
+    "data/eval/side_by_side.jsonl",
+    "data/eval/judge_results_rm.json",
+    "adapters/dpo/adapter_config.json",
+    "adapters/dpo/split.json",
+    "adapters/sft-mini/adapter_config.json",
+    "adapters/sft-mini/sft_metrics.json",
+    "submission/run_manifest.json"
+  ],
+  "note": "Recovered real printed JSON and embedded PNG outputs. Full Kaggle ZIP still required; no fabricated adapters or answer records."
+}

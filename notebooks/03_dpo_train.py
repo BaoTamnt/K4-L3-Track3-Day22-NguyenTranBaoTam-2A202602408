@@ -76,7 +76,13 @@ trainer = DPOTrainer(
     eval_dataset=eval_ds,
     processing_class=tokenizer,
 )
+import time
+
+torch.cuda.reset_peak_memory_stats()
+started = time.perf_counter()
 result = trainer.train()
+dpo_seconds = time.perf_counter() - started
+dpo_peak_gb = torch.cuda.max_memory_allocated() / 1e9
 final_eval = trainer.evaluate()
 print(f"train loss {result.training_loss:.4f} · held-out reward accuracy "
       f"{final_eval.get('eval_rewards/accuracies', float('nan')):.3f}")
@@ -137,6 +143,9 @@ metrics = {
     "eval_reward_gap": final_eval.get("eval_rewards/margins"),
     "eval_reward_accuracy": final_eval.get("eval_rewards/accuracies"),
     "diagnosis": label,
+    "training_seconds": dpo_seconds,
+    "peak_allocated_gb": dpo_peak_gb,
+    "history": trainer.state.log_history,
 }
 (C.DPO_ADAPTER / "dpo_metrics.json").write_text(json.dumps(metrics, indent=2))
 print(json.dumps(metrics, indent=2))

@@ -103,7 +103,13 @@ trainer = train_on_responses_only(
     instruction_part="<|im_start|>user\n",
     response_part="<|im_start|>assistant\n",
 )
+import time
+
+torch.cuda.reset_peak_memory_stats()
+started = time.perf_counter()
 result = trainer.train()
+sft_seconds = time.perf_counter() - started
+sft_peak_gb = torch.cuda.max_memory_allocated() / 1e9
 print(f"Final SFT loss: {result.training_loss:.4f}")
 
 # %%
@@ -128,6 +134,13 @@ plt.show()
 model.save_pretrained(str(C.SFT_ADAPTER))
 tokenizer.save_pretrained(str(C.SFT_ADAPTER))
 model.save_pretrained_merged(str(C.SFT_MERGED), tokenizer, save_method="merged_16bit")
+import json
+
+(C.SFT_ADAPTER / "sft_metrics.json").write_text(json.dumps({
+    "dataset": C.SFT_DATASET, "samples": len(ds), "epochs": 1,
+    "training_loss": float(result.training_loss), "training_seconds": sft_seconds,
+    "peak_allocated_gb": sft_peak_gb, "history": trainer.state.log_history,
+}, ensure_ascii=False, indent=2), encoding="utf-8")
 print(f"Saved adapter → {C.SFT_ADAPTER}\nSaved merged 16-bit → {C.SFT_MERGED}")
 
 # %%

@@ -93,7 +93,7 @@ RELEASE_GPU = (
 )
 
 
-def render(tier: str) -> dict:
+def render(tier: str, core_only: bool = False) -> dict:
     big = tier == "BIGGPU"
     pins = " ".join(f'"{s}"' for s in requirements())
     cells = [
@@ -129,12 +129,52 @@ def render(tier: str) -> dict:
     for module in sorted((REPO / "lab22").glob("*.py")):
         body = module.read_text(encoding="utf-8")
         cells.append(code(f"%%writefile {WORKDIR}/lab22/{module.name}\n{body}"))
-    for i, (stem, kind) in enumerate(STAGES):
+    if core_only:
+        cells.append(md("### Evidence backups\n\nThe ZIP is updated after every completed stage. If a later stage fails, download the previous backup with `files.download(str(archive))` in a new cell. Backups contain evidence, not model weights; restart training from NB1 after losing the runtime."))
+        cells.append(code("""import hashlib, json
+from zipfile import ZipFile, ZIP_DEFLATED
+from google.colab import files
+archive = WORK / 'lab22-results.zip'
+completed_stages = []
+def export_evidence(stage):
+    if stage not in completed_stages:
+        completed_stages.append(stage)
+    evidence = []
+    for folder in ('submission/screenshots', 'data/eval', 'data/pref'):
+        evidence.extend(p for p in (WORK / folder).rglob('*') if p.is_file())
+    for folder in ('adapters/sft-mini', 'adapters/dpo'):
+        evidence.extend((WORK / folder).glob('*.json'))
+    config = WORK / 'models/sft-merged/config.json'
+    if config.is_file():
+        evidence.append(config)
+    from lab22 import config as C
+    import torch
+    manifest = {
+        'completed_stages': list(completed_stages),
+        'configuration': C.summary(),
+        'gpu': torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        'weights_included': False,
+        'sha256': {p.relative_to(WORK).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in evidence},
+    }
+    temporary = archive.with_suffix('.tmp')
+    with ZipFile(temporary, 'w', ZIP_DEFLATED) as z:
+        for item in evidence:
+            z.write(item, item.relative_to(WORK))
+        z.writestr('submission/run_manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2))
+    temporary.replace(archive)
+    print(f'Evidence saved: {archive}; completed: {completed_stages}')"""))
+    stages = [(stem, kind) for stem, kind in STAGES if not core_only or kind.startswith("core")]
+    for i, (stem, kind) in enumerate(stages):
         if i:
             # One Colab kernel runs every stage, so drop the previous stage's GPU objects.
             cells.append(code(RELEASE_GPU))
         cells.append(md(f"---\n# ⏵ `notebooks/{stem}.py` ({kind})"))
         cells.extend(percent_cells(REPO / "notebooks" / f"{stem}.py"))
+        if core_only:
+            cells.append(code(f"export_evidence({stem!r})"))
+    if core_only:
+        cells.append(md("## Download evidence after NB4\n\nDownload the ZIP and use File > Download > Download .ipynb to preserve notebook outputs. No model weights are included."))
+        cells.append(code("export_evidence('04_compare_and_eval')\nfiles.download(str(archive))"))
     return {
         "cells": cells,
         "metadata": {
@@ -153,9 +193,11 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail if colab/*.ipynb differ from the sources")
     args = parser.parse_args()
     stale = []
-    for tier, name in TARGETS.items():
+    targets = [(tier, name, False) for tier, name in TARGETS.items()]
+    targets.append(("T4", "Lab22_DPO_T4_Core.ipynb", True))
+    for tier, name, core_only in targets:
         path = REPO / "colab" / name
-        nb = render(tier)
+        nb = render(tier, core_only=core_only)
         if args.check:
             if not path.exists() or json.loads(path.read_text(encoding="utf-8")) != nb:
                 stale.append(name)
